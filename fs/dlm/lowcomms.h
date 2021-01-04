@@ -1,18 +1,18 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /******************************************************************************
 *******************************************************************************
 **
 **  Copyright (C) Sistina Software, Inc.  1997-2003  All rights reserved.
 **  Copyright (C) 2004-2009 Red Hat, Inc.  All rights reserved.
 **
-**  This copyrighted material is made available to anyone wishing to use,
-**  modify, copy, or redistribute it subject to the terms and conditions
-**  of the GNU General Public License v.2.
 **
 *******************************************************************************
 ******************************************************************************/
 
 #ifndef __LOWCOMMS_DOT_H__
 #define __LOWCOMMS_DOT_H__
+
+#define LOWCOMMS_MAX_TX_BUFFER_LEN	4096
 
 int dlm_lowcomms_start(void);
 void dlm_lowcomms_stop(void);

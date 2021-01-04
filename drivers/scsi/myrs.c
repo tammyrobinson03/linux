@@ -87,7 +87,7 @@ static char *myrs_raid_level_name(enum myrs_raid_level level)
 	return NULL;
 }
 
-/**
+/*
  * myrs_reset_cmd - clears critical fields in struct myrs_cmdblk
  */
 static inline void myrs_reset_cmd(struct myrs_cmdblk *cmd_blk)
@@ -98,7 +98,7 @@ static inline void myrs_reset_cmd(struct myrs_cmdblk *cmd_blk)
 	cmd_blk->status = 0;
 }
 
-/**
+/*
  * myrs_qcmd - queues Command for DAC960 V2 Series Controllers.
  */
 static void myrs_qcmd(struct myrs_hba *cs, struct myrs_cmdblk *cmd_blk)
@@ -122,7 +122,7 @@ static void myrs_qcmd(struct myrs_hba *cs, struct myrs_cmdblk *cmd_blk)
 	cs->next_cmd_mbox = next_mbox;
 }
 
-/**
+/*
  * myrs_exec_cmd - executes V2 Command and waits for completion.
  */
 static void myrs_exec_cmd(struct myrs_hba *cs,
@@ -136,11 +136,10 @@ static void myrs_exec_cmd(struct myrs_hba *cs,
 	myrs_qcmd(cs, cmd_blk);
 	spin_unlock_irqrestore(&cs->queue_lock, flags);
 
-	WARN_ON(in_interrupt());
 	wait_for_completion(&complete);
 }
 
-/**
+/*
  * myrs_report_progress - prints progress message
  */
 static void myrs_report_progress(struct myrs_hba *cs, unsigned short ldev_num,
@@ -153,7 +152,7 @@ static void myrs_report_progress(struct myrs_hba *cs, unsigned short ldev_num,
 		     (100 * (int)(blocks >> 7)) / (int)(size >> 7));
 }
 
-/**
+/*
  * myrs_get_ctlr_info - executes a Controller Information IOCTL Command
  */
 static unsigned char myrs_get_ctlr_info(struct myrs_hba *cs)
@@ -163,9 +162,12 @@ static unsigned char myrs_get_ctlr_info(struct myrs_hba *cs)
 	dma_addr_t ctlr_info_addr;
 	union myrs_sgl *sgl;
 	unsigned char status;
-	struct myrs_ctlr_info old;
+	unsigned short ldev_present, ldev_critical, ldev_offline;
 
-	memcpy(&old, cs->ctlr_info, sizeof(struct myrs_ctlr_info));
+	ldev_present = cs->ctlr_info->ldev_present;
+	ldev_critical = cs->ctlr_info->ldev_critical;
+	ldev_offline = cs->ctlr_info->ldev_offline;
+
 	ctlr_info_addr = dma_map_single(&cs->pdev->dev, cs->ctlr_info,
 					sizeof(struct myrs_ctlr_info),
 					DMA_FROM_DEVICE);
@@ -198,9 +200,9 @@ static unsigned char myrs_get_ctlr_info(struct myrs_hba *cs)
 		    cs->ctlr_info->rbld_active +
 		    cs->ctlr_info->exp_active != 0)
 			cs->needs_update = true;
-		if (cs->ctlr_info->ldev_present != old.ldev_present ||
-		    cs->ctlr_info->ldev_critical != old.ldev_critical ||
-		    cs->ctlr_info->ldev_offline != old.ldev_offline)
+		if (cs->ctlr_info->ldev_present != ldev_present ||
+		    cs->ctlr_info->ldev_critical != ldev_critical ||
+		    cs->ctlr_info->ldev_offline != ldev_offline)
 			shost_printk(KERN_INFO, cs->host,
 				     "Logical drive count changes (%d/%d/%d)\n",
 				     cs->ctlr_info->ldev_critical,
@@ -211,7 +213,7 @@ static unsigned char myrs_get_ctlr_info(struct myrs_hba *cs)
 	return status;
 }
 
-/**
+/*
  * myrs_get_ldev_info - executes a Logical Device Information IOCTL Command
  */
 static unsigned char myrs_get_ldev_info(struct myrs_hba *cs,
@@ -298,7 +300,7 @@ static unsigned char myrs_get_ldev_info(struct myrs_hba *cs,
 	return status;
 }
 
-/**
+/*
  * myrs_get_pdev_info - executes a "Read Physical Device Information" Command
  */
 static unsigned char myrs_get_pdev_info(struct myrs_hba *cs,
@@ -342,7 +344,7 @@ static unsigned char myrs_get_pdev_info(struct myrs_hba *cs,
 	return status;
 }
 
-/**
+/*
  * myrs_dev_op - executes a "Device Operation" Command
  */
 static unsigned char myrs_dev_op(struct myrs_hba *cs,
@@ -366,7 +368,7 @@ static unsigned char myrs_dev_op(struct myrs_hba *cs,
 	return status;
 }
 
-/**
+/*
  * myrs_translate_pdev - translates a Physical Device Channel and
  * TargetID into a Logical Device.
  */
@@ -411,7 +413,7 @@ static unsigned char myrs_translate_pdev(struct myrs_hba *cs,
 	return status;
 }
 
-/**
+/*
  * myrs_get_event - executes a Get Event Command
  */
 static unsigned char myrs_get_event(struct myrs_hba *cs,
@@ -473,7 +475,7 @@ static unsigned char myrs_get_fwstatus(struct myrs_hba *cs)
 	return status;
 }
 
-/**
+/*
  * myrs_enable_mmio_mbox - enables the Memory Mailbox Interface
  */
 static bool myrs_enable_mmio_mbox(struct myrs_hba *cs,
@@ -574,7 +576,7 @@ out_free:
 	return (status == MYRS_STATUS_SUCCESS);
 }
 
-/**
+/*
  * myrs_get_config - reads the Configuration Information
  */
 static int myrs_get_config(struct myrs_hba *cs)
@@ -679,7 +681,7 @@ static int myrs_get_config(struct myrs_hba *cs)
 	return 0;
 }
 
-/**
+/*
  * myrs_log_event - prints a Controller Event message
  */
 static struct {
@@ -815,7 +817,7 @@ static void myrs_log_event(struct myrs_hba *cs, struct myrs_event *ev)
 	unsigned char ev_type, *ev_msg;
 	struct Scsi_Host *shost = cs->host;
 	struct scsi_device *sdev;
-	struct scsi_sense_hdr sshdr;
+	struct scsi_sense_hdr sshdr = {0};
 	unsigned char sense_info[4];
 	unsigned char cmd_specific[4];
 
@@ -1526,7 +1528,7 @@ static struct device_attribute *myrs_shost_attrs[] = {
 /*
  * SCSI midlayer interface
  */
-int myrs_host_reset(struct scsi_cmnd *scmd)
+static int myrs_host_reset(struct scsi_cmnd *scmd)
 {
 	struct Scsi_Host *shost = scmd->device->host;
 	struct myrs_hba *cs = shost_priv(shost);
@@ -1916,7 +1918,7 @@ static void myrs_slave_destroy(struct scsi_device *sdev)
 	kfree(sdev->hostdata);
 }
 
-struct scsi_host_template myrs_template = {
+static struct scsi_host_template myrs_template = {
 	.module			= THIS_MODULE,
 	.name			= "DAC960",
 	.proc_name		= "myrs",
@@ -2030,7 +2032,7 @@ myrs_get_state(struct device *dev)
 	raid_set_state(myrs_raid_template, dev, state);
 }
 
-struct raid_function_template myrs_raid_functions = {
+static struct raid_function_template myrs_raid_functions = {
 	.cookie		= &myrs_template,
 	.is_raid	= myrs_is_raid,
 	.get_resync	= myrs_get_resync,
@@ -2040,7 +2042,7 @@ struct raid_function_template myrs_raid_functions = {
 /*
  * PCI interface functions
  */
-void myrs_flush_cache(struct myrs_hba *cs)
+static void myrs_flush_cache(struct myrs_hba *cs)
 {
 	myrs_dev_op(cs, MYRS_IOCTL_FLUSH_DEVICE_DATA, MYRS_RAID_CONTROLLER);
 }
@@ -2308,7 +2310,7 @@ static struct myrs_hba *myrs_detect(struct pci_dev *pdev,
 	/* Map the Controller Register Window. */
 	if (mmio_size < PAGE_SIZE)
 		mmio_size = PAGE_SIZE;
-	cs->mmio_base = ioremap_nocache(cs->pci_addr & PAGE_MASK, mmio_size);
+	cs->mmio_base = ioremap(cs->pci_addr & PAGE_MASK, mmio_size);
 	if (cs->mmio_base == NULL) {
 		dev_err(&pdev->dev,
 			"Unable to map Controller Register Window\n");
@@ -2335,11 +2337,11 @@ Failure:
 	return NULL;
 }
 
-/**
+/*
  * myrs_err_status reports Controller BIOS Messages passed through
-  the Error Status Register when the driver performs the BIOS handshaking.
-  It returns true for fatal errors and false otherwise.
-*/
+ * the Error Status Register when the driver performs the BIOS handshaking.
+ * It returns true for fatal errors and false otherwise.
+ */
 
 static bool myrs_err_status(struct myrs_hba *cs, unsigned char status,
 		unsigned char parm0, unsigned char parm1)

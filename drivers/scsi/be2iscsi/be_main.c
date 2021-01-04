@@ -164,7 +164,7 @@ DEVICE_ATTR(beiscsi_active_session_count, S_IRUGO,
 	     beiscsi_active_session_disp, NULL);
 DEVICE_ATTR(beiscsi_free_session_count, S_IRUGO,
 	     beiscsi_free_session_disp, NULL);
-struct device_attribute *beiscsi_attrs[] = {
+static struct device_attribute *beiscsi_attrs[] = {
 	&dev_attr_beiscsi_log_enable,
 	&dev_attr_beiscsi_drvr_ver,
 	&dev_attr_beiscsi_adapter_family,
@@ -213,12 +213,6 @@ static char const *cqe_desc[] = {
 	"CXN_KILLED_SYN_RCVD",
 	"CXN_KILLED_IMM_DATA_RCVD"
 };
-
-static int beiscsi_slave_configure(struct scsi_device *sdev)
-{
-	blk_queue_max_segment_size(sdev->request_queue, 65536);
-	return 0;
-}
 
 static int beiscsi_eh_abort(struct scsi_cmnd *sc)
 {
@@ -393,7 +387,6 @@ static struct scsi_host_template beiscsi_sht = {
 	.proc_name = DRV_NAME,
 	.queuecommand = iscsi_queuecommand,
 	.change_queue_depth = scsi_change_queue_depth,
-	.slave_configure = beiscsi_slave_configure,
 	.target_alloc = iscsi_target_alloc,
 	.eh_timed_out = iscsi_eh_cmd_timed_out,
 	.eh_abort_handler = beiscsi_eh_abort,
@@ -404,8 +397,8 @@ static struct scsi_host_template beiscsi_sht = {
 	.can_queue = BE2_IO_DEPTH,
 	.this_id = -1,
 	.max_sectors = BEISCSI_MAX_SECTORS,
+	.max_segment_size = 65536,
 	.cmd_per_lun = BEISCSI_CMD_PER_LUN,
-	.use_clustering = ENABLE_CLUSTERING,
 	.vendor_id = SCSI_NL_VID_TYPE_PCI | BE_VENDOR_ID,
 	.track_queue_depth = 1,
 };
@@ -460,14 +453,14 @@ static int beiscsi_map_pci_bars(struct beiscsi_hba *phba,
 	u8 __iomem *addr;
 	int pcicfg_reg;
 
-	addr = ioremap_nocache(pci_resource_start(pcidev, 2),
+	addr = ioremap(pci_resource_start(pcidev, 2),
 			       pci_resource_len(pcidev, 2));
 	if (addr == NULL)
 		return -ENOMEM;
 	phba->ctrl.csr = addr;
 	phba->csr_va = addr;
 
-	addr = ioremap_nocache(pci_resource_start(pcidev, 4), 128 * 1024);
+	addr = ioremap(pci_resource_start(pcidev, 4), 128 * 1024);
 	if (addr == NULL)
 		goto pci_map_err;
 	phba->ctrl.db = addr;
@@ -478,7 +471,7 @@ static int beiscsi_map_pci_bars(struct beiscsi_hba *phba,
 	else
 		pcicfg_reg = 0;
 
-	addr = ioremap_nocache(pci_resource_start(pcidev, pcicfg_reg),
+	addr = ioremap(pci_resource_start(pcidev, pcicfg_reg),
 			       pci_resource_len(pcidev, pcicfg_reg));
 
 	if (addr == NULL)
@@ -984,7 +977,7 @@ beiscsi_get_wrb_handle(struct hwi_wrb_context *pwrb_context,
  * alloc_wrb_handle - To allocate a wrb handle
  * @phba: The hba pointer
  * @cid: The cid to use for allocation
- * @pwrb_context: ptr to ptr to wrb context
+ * @pcontext: ptr to ptr to wrb context
  *
  * This happens under session_lock until submission to chip
  */
@@ -1401,7 +1394,7 @@ static void hwi_complete_cmd(struct beiscsi_conn *beiscsi_conn,
 	spin_unlock_bh(&session->back_lock);
 }
 
-/**
+/*
  * ASYNC PDUs include
  * a. Unsolicited NOP-In (target initiated NOP-In)
  * b. ASYNC Messages
@@ -1539,6 +1532,7 @@ beiscsi_hdl_get_handle(struct beiscsi_conn *beiscsi_conn,
 		break;
 	case UNSOL_DATA_DIGEST_ERROR_NOTIFY:
 		error = 1;
+		fallthrough;
 	case UNSOL_DATA_NOTIFY:
 		pasync_handle = pasync_ctx->async_entry[ci].data;
 		break;
@@ -3328,8 +3322,8 @@ static int be_queue_alloc(struct beiscsi_hba *phba, struct be_queue_info *q,
 	q->len = len;
 	q->entry_size = entry_size;
 	mem->size = len * entry_size;
-	mem->va = dma_zalloc_coherent(&phba->pcidev->dev, mem->size, &mem->dma,
-			GFP_KERNEL);
+	mem->va = dma_alloc_coherent(&phba->pcidev->dev, mem->size, &mem->dma,
+				     GFP_KERNEL);
 	if (!mem->va)
 		return -ENOMEM;
 	return 0;
@@ -3573,7 +3567,7 @@ static void be2iscsi_enable_msix(struct beiscsi_hba *phba)
 
 	/* if eqid_count == 1 fall back to INTX */
 	if (enable_msix && nvec > 1) {
-		const struct irq_affinity desc = { .post_vectors = 1 };
+		struct irq_affinity desc = { .post_vectors = 1 };
 
 		if (pci_alloc_irq_vectors_affinity(phba->pcidev, 2, nvec,
 				PCI_IRQ_MSIX | PCI_IRQ_AFFINITY, &desc) < 0) {

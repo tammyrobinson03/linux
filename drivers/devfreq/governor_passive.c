@@ -1,13 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * linux/drivers/devfreq/governor_passive.c
  *
  * Copyright (C) 2016 Samsung Electronics
  * Author: Chanwoo Choi <cw00.choi@samsung.com>
  * Author: MyungJoo Ham <myungjoo.ham@samsung.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/module.h>
@@ -95,36 +92,6 @@ out:
 	return ret;
 }
 
-static int update_devfreq_passive(struct devfreq *devfreq, unsigned long freq)
-{
-	int ret;
-
-	if (!devfreq->governor)
-		return -EINVAL;
-
-	mutex_lock_nested(&devfreq->lock, SINGLE_DEPTH_NESTING);
-
-	ret = devfreq->governor->get_target_freq(devfreq, &freq);
-	if (ret < 0)
-		goto out;
-
-	ret = devfreq->profile->target(devfreq->dev.parent, &freq, 0);
-	if (ret < 0)
-		goto out;
-
-	if (devfreq->profile->freq_table
-		&& (devfreq_update_status(devfreq, freq)))
-		dev_err(&devfreq->dev,
-			"Couldn't update frequency transition information.\n");
-
-	devfreq->previous_freq = freq;
-
-out:
-	mutex_unlock(&devfreq->lock);
-
-	return 0;
-}
-
 static int devfreq_passive_notifier_call(struct notifier_block *nb,
 				unsigned long event, void *ptr)
 {
@@ -134,17 +101,25 @@ static int devfreq_passive_notifier_call(struct notifier_block *nb,
 	struct devfreq *parent = (struct devfreq *)data->parent;
 	struct devfreq_freqs *freqs = (struct devfreq_freqs *)ptr;
 	unsigned long freq = freqs->new;
+	int ret = 0;
 
+	mutex_lock_nested(&devfreq->lock, SINGLE_DEPTH_NESTING);
 	switch (event) {
 	case DEVFREQ_PRECHANGE:
 		if (parent->previous_freq > freq)
-			update_devfreq_passive(devfreq, freq);
+			ret = devfreq_update_target(devfreq, freq);
+
 		break;
 	case DEVFREQ_POSTCHANGE:
 		if (parent->previous_freq < freq)
-			update_devfreq_passive(devfreq, freq);
+			ret = devfreq_update_target(devfreq, freq);
 		break;
 	}
+	mutex_unlock(&devfreq->lock);
+
+	if (ret < 0)
+		dev_warn(&devfreq->dev,
+			"failed to update devfreq using passive governor\n");
 
 	return NOTIFY_DONE;
 }
@@ -152,7 +127,6 @@ static int devfreq_passive_notifier_call(struct notifier_block *nb,
 static int devfreq_passive_event_handler(struct devfreq *devfreq,
 				unsigned int event, void *data)
 {
-	struct device *dev = devfreq->dev.parent;
 	struct devfreq_passive_data *p_data
 			= (struct devfreq_passive_data *)devfreq->data;
 	struct devfreq *parent = (struct devfreq *)p_data->parent;
@@ -168,12 +142,12 @@ static int devfreq_passive_event_handler(struct devfreq *devfreq,
 			p_data->this = devfreq;
 
 		nb->notifier_call = devfreq_passive_notifier_call;
-		ret = devm_devfreq_register_notifier(dev, parent, nb,
+		ret = devfreq_register_notifier(parent, nb,
 					DEVFREQ_TRANSITION_NOTIFIER);
 		break;
 	case DEVFREQ_GOV_STOP:
-		devm_devfreq_unregister_notifier(dev, parent, nb,
-					DEVFREQ_TRANSITION_NOTIFIER);
+		WARN_ON(devfreq_unregister_notifier(parent, nb,
+					DEVFREQ_TRANSITION_NOTIFIER));
 		break;
 	default:
 		break;
@@ -184,7 +158,7 @@ static int devfreq_passive_event_handler(struct devfreq *devfreq,
 
 static struct devfreq_governor devfreq_passive = {
 	.name = DEVFREQ_GOV_PASSIVE,
-	.immutable = 1,
+	.flags = DEVFREQ_GOV_FLAG_IMMUTABLE,
 	.get_target_freq = devfreq_passive_get_target_freq,
 	.event_handler = devfreq_passive_event_handler,
 };

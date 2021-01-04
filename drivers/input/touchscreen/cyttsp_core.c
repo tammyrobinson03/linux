@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Core Source for:
  * Cypress TrueTouch(TM) Standard Product (TTSP) touchscreen drivers.
@@ -9,22 +10,7 @@
  * Copyright (C) 2009, 2010, 2011 Cypress Semiconductor, Inc.
  * Copyright (C) 2012 Javier Martinez Canillas <javier@dowhile0.org>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2, and only version 2, as published by the
- * Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
  * Contact Cypress Semiconductor at www.cypress.com <kev@cypress.com>
- *
  */
 
 #include <linux/delay.h>
@@ -354,7 +340,7 @@ static void cyttsp_report_tchdata(struct cyttsp *ts)
 			continue;
 
 		input_mt_slot(input, i);
-		input_mt_report_slot_state(input, MT_TOOL_FINGER, false);
+		input_mt_report_slot_inactive(input);
 	}
 
 	input_sync(input);
@@ -493,7 +479,7 @@ static int __maybe_unused cyttsp_suspend(struct device *dev)
 
 	mutex_lock(&ts->input->mutex);
 
-	if (ts->input->users) {
+	if (input_device_enabled(ts->input)) {
 		retval = cyttsp_disable(ts);
 		if (retval == 0)
 			ts->suspended = true;
@@ -510,7 +496,7 @@ static int __maybe_unused cyttsp_resume(struct device *dev)
 
 	mutex_lock(&ts->input->mutex);
 
-	if (ts->input->users)
+	if (input_device_enabled(ts->input))
 		cyttsp_enable(ts);
 
 	ts->suspended = false;

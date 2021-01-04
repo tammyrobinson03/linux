@@ -26,7 +26,11 @@
  *          Jerome Glisse
  *          Christian König
  */
-#include <drm/drmP.h>
+
+#include <drm/drm_debugfs.h>
+#include <drm/drm_device.h>
+#include <drm/drm_file.h>
+
 #include "radeon.h"
 
 /*
@@ -214,6 +218,7 @@ void radeon_ring_undo(struct radeon_ring *ring)
 /**
  * radeon_ring_unlock_undo - reset the wptr and unlock the ring
  *
+ * @rdev:       radeon device structure
  * @ring: radeon_ring structure holding ring information
  *
  * Call radeon_ring_undo() then unlock the ring (all asics).
@@ -227,6 +232,7 @@ void radeon_ring_unlock_undo(struct radeon_device *rdev, struct radeon_ring *rin
 /**
  * radeon_ring_lockup_update - update lockup variables
  *
+ * @rdev:       radeon device structure
  * @ring: radeon_ring structure holding ring information
  *
  * Update the last rptr value and timestamp (all asics).
@@ -271,6 +277,7 @@ bool radeon_ring_test_lockup(struct radeon_device *rdev, struct radeon_ring *rin
  *
  * @rdev: radeon_device pointer
  * @ring: the ring we want to back up
+ * @data: placeholder for returned commit data
  *
  * Saves all unprocessed commits from a ring, returns the number of dwords saved.
  */

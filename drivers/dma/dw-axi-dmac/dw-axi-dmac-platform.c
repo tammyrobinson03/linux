@@ -512,7 +512,8 @@ dma_chan_prep_dma_memcpy(struct dma_chan *dchan, dma_addr_t dst_adr,
 	return vchan_tx_prep(&chan->vc, &first->vd, flags);
 
 err_desc_get:
-	axi_desc_put(first);
+	if (first)
+		axi_desc_put(first);
 	return NULL;
 }
 
@@ -635,13 +636,9 @@ static int dma_chan_terminate_all(struct dma_chan *dchan)
 
 	vchan_get_all_descriptors(&chan->vc, &head);
 
-	/*
-	 * As vchan_dma_desc_free_list can access to desc_allocated list
-	 * we need to call it in vc.lock context.
-	 */
-	vchan_dma_desc_free_list(&chan->vc, &head);
-
 	spin_unlock_irqrestore(&chan->vc.lock, flags);
+
+	vchan_dma_desc_free_list(&chan->vc, &head);
 
 	dev_vdbg(dchan2dev(dchan), "terminated: %s\n", axi_chan_name(chan));
 
@@ -995,7 +992,7 @@ static struct platform_driver dw_driver = {
 	.remove		= dw_remove,
 	.driver = {
 		.name	= KBUILD_MODNAME,
-		.of_match_table = of_match_ptr(dw_dma_of_id_table),
+		.of_match_table = dw_dma_of_id_table,
 		.pm = &dw_axi_dma_pm_ops,
 	},
 };

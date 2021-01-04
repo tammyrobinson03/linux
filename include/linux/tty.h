@@ -66,7 +66,7 @@ struct tty_buffer {
 	int read;
 	int flags;
 	/* Data points here */
-	unsigned long data[0];
+	unsigned long data[];
 };
 
 /* Values for .flags field of tty_buffer */
@@ -225,6 +225,8 @@ struct tty_port_client_operations {
 	void (*write_wakeup)(struct tty_port *port);
 };
 
+extern const struct tty_port_client_operations tty_port_default_client_ops;
+
 struct tty_port {
 	struct tty_bufhead	buf;		/* Locked internally */
 	struct tty_struct	*tty;		/* Back pointer */
@@ -301,9 +303,12 @@ struct tty_struct {
 	spinlock_t flow_lock;
 	/* Termios values are protected by the termios rwsem */
 	struct ktermios termios, termios_locked;
-	struct termiox *termiox;	/* May be NULL for unsupported */
 	char name[64];
 	struct pid *pgrp;		/* Protected by ctrl lock */
+	/*
+	 * Writes protected by both ctrl lock and legacy mutex, readers must use
+	 * at least one of them.
+	 */
 	struct pid *session;
 	unsigned long flags;
 	int count;
@@ -366,6 +371,7 @@ struct tty_file_private {
 #define TTY_NO_WRITE_SPLIT 	17	/* Preserve write boundaries to driver */
 #define TTY_HUPPED 		18	/* Post driver->hangup() */
 #define TTY_HUPPING		19	/* Hangup in progress */
+#define TTY_LDISC_CHANGING	20	/* Change pending - non-block IO */
 #define TTY_LDISC_HALTED	22	/* Line discipline is halted */
 
 /* Values for tty->flow_change */
@@ -381,6 +387,12 @@ static inline void tty_set_flow_change(struct tty_struct *tty, int val)
 {
 	tty->flow_change = val;
 	smp_mb();
+}
+
+static inline bool tty_io_nonblock(struct tty_struct *tty, struct file *file)
+{
+	return file->f_flags & O_NONBLOCK ||
+		test_bit(TTY_LDISC_CHANGING, &tty->flags);
 }
 
 static inline bool tty_io_error(struct tty_struct *tty)
@@ -556,6 +568,7 @@ extern struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx);
 extern void tty_release_struct(struct tty_struct *tty, int idx);
 extern int tty_release(struct inode *inode, struct file *filp);
 extern void tty_init_termios(struct tty_struct *tty);
+extern void tty_save_termios(struct tty_struct *tty);
 extern int tty_standard_install(struct tty_driver *driver,
 		struct tty_struct *tty);
 
@@ -595,82 +608,64 @@ static inline struct tty_port *tty_port_get(struct tty_port *port)
 }
 
 /* If the cts flow control is enabled, return true. */
-static inline bool tty_port_cts_enabled(struct tty_port *port)
+static inline bool tty_port_cts_enabled(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_CTS_FLOW, &port->iflags);
 }
 
 static inline void tty_port_set_cts_flow(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_CTS_FLOW, &port->iflags);
-	else
-		clear_bit(TTY_PORT_CTS_FLOW, &port->iflags);
+	assign_bit(TTY_PORT_CTS_FLOW, &port->iflags, val);
 }
 
-static inline bool tty_port_active(struct tty_port *port)
+static inline bool tty_port_active(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_ACTIVE, &port->iflags);
 }
 
 static inline void tty_port_set_active(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_ACTIVE, &port->iflags);
-	else
-		clear_bit(TTY_PORT_ACTIVE, &port->iflags);
+	assign_bit(TTY_PORT_ACTIVE, &port->iflags, val);
 }
 
-static inline bool tty_port_check_carrier(struct tty_port *port)
+static inline bool tty_port_check_carrier(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_CHECK_CD, &port->iflags);
 }
 
 static inline void tty_port_set_check_carrier(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_CHECK_CD, &port->iflags);
-	else
-		clear_bit(TTY_PORT_CHECK_CD, &port->iflags);
+	assign_bit(TTY_PORT_CHECK_CD, &port->iflags, val);
 }
 
-static inline bool tty_port_suspended(struct tty_port *port)
+static inline bool tty_port_suspended(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_SUSPENDED, &port->iflags);
 }
 
 static inline void tty_port_set_suspended(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_SUSPENDED, &port->iflags);
-	else
-		clear_bit(TTY_PORT_SUSPENDED, &port->iflags);
+	assign_bit(TTY_PORT_SUSPENDED, &port->iflags, val);
 }
 
-static inline bool tty_port_initialized(struct tty_port *port)
+static inline bool tty_port_initialized(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_INITIALIZED, &port->iflags);
 }
 
 static inline void tty_port_set_initialized(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_INITIALIZED, &port->iflags);
-	else
-		clear_bit(TTY_PORT_INITIALIZED, &port->iflags);
+	assign_bit(TTY_PORT_INITIALIZED, &port->iflags, val);
 }
 
-static inline bool tty_port_kopened(struct tty_port *port)
+static inline bool tty_port_kopened(const struct tty_port *port)
 {
 	return test_bit(TTY_PORT_KOPENED, &port->iflags);
 }
 
 static inline void tty_port_set_kopened(struct tty_port *port, bool val)
 {
-	if (val)
-		set_bit(TTY_PORT_KOPENED, &port->iflags);
-	else
-		clear_bit(TTY_PORT_KOPENED, &port->iflags);
+	assign_bit(TTY_PORT_KOPENED, &port->iflags, val);
 }
 
 extern struct tty_struct *tty_port_tty_get(struct tty_port *port);
@@ -706,6 +701,7 @@ extern int __must_check tty_ldisc_init(struct tty_struct *tty);
 extern void tty_ldisc_deinit(struct tty_struct *tty);
 extern int tty_ldisc_receive_buf(struct tty_ldisc *ld, const unsigned char *p,
 				 char *f, int count);
+extern void tty_sysctl_init(void);
 
 /* n_tty.c */
 extern void n_tty_inherit_ops(struct tty_ldisc_ops *ops);

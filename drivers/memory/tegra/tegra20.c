@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 NVIDIA CORPORATION.  All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
+
+#include <linux/of_device.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
 #include <dt-bindings/memory/tegra20-mc.h>
 
@@ -198,7 +199,7 @@ static const struct tegra_mc_reset tegra20_mc_resets[] = {
 	TEGRA20_MC_RESET(VI,     0x100, 0x178, 0x104, 14),
 };
 
-static int terga20_mc_hotreset_assert(struct tegra_mc *mc,
+static int tegra20_mc_hotreset_assert(struct tegra_mc *mc,
 				      const struct tegra_mc_reset *rst)
 {
 	unsigned long flags;
@@ -214,7 +215,7 @@ static int terga20_mc_hotreset_assert(struct tegra_mc *mc,
 	return 0;
 }
 
-static int terga20_mc_hotreset_deassert(struct tegra_mc *mc,
+static int tegra20_mc_hotreset_deassert(struct tegra_mc *mc,
 					const struct tegra_mc_reset *rst)
 {
 	unsigned long flags;
@@ -230,7 +231,7 @@ static int terga20_mc_hotreset_deassert(struct tegra_mc *mc,
 	return 0;
 }
 
-static int terga20_mc_block_dma(struct tegra_mc *mc,
+static int tegra20_mc_block_dma(struct tegra_mc *mc,
 				const struct tegra_mc_reset *rst)
 {
 	unsigned long flags;
@@ -246,19 +247,19 @@ static int terga20_mc_block_dma(struct tegra_mc *mc,
 	return 0;
 }
 
-static bool terga20_mc_dma_idling(struct tegra_mc *mc,
+static bool tegra20_mc_dma_idling(struct tegra_mc *mc,
 				  const struct tegra_mc_reset *rst)
 {
 	return mc_readl(mc, rst->status) == 0;
 }
 
-static int terga20_mc_reset_status(struct tegra_mc *mc,
+static int tegra20_mc_reset_status(struct tegra_mc *mc,
 				   const struct tegra_mc_reset *rst)
 {
 	return (mc_readl(mc, rst->reset) & BIT(rst->bit)) == 0;
 }
 
-static int terga20_mc_unblock_dma(struct tegra_mc *mc,
+static int tegra20_mc_unblock_dma(struct tegra_mc *mc,
 				  const struct tegra_mc_reset *rst)
 {
 	unsigned long flags;
@@ -274,13 +275,85 @@ static int terga20_mc_unblock_dma(struct tegra_mc *mc,
 	return 0;
 }
 
-const struct tegra_mc_reset_ops terga20_mc_reset_ops = {
-	.hotreset_assert = terga20_mc_hotreset_assert,
-	.hotreset_deassert = terga20_mc_hotreset_deassert,
-	.block_dma = terga20_mc_block_dma,
-	.dma_idling = terga20_mc_dma_idling,
-	.unblock_dma = terga20_mc_unblock_dma,
-	.reset_status = terga20_mc_reset_status,
+static const struct tegra_mc_reset_ops tegra20_mc_reset_ops = {
+	.hotreset_assert = tegra20_mc_hotreset_assert,
+	.hotreset_deassert = tegra20_mc_hotreset_deassert,
+	.block_dma = tegra20_mc_block_dma,
+	.dma_idling = tegra20_mc_dma_idling,
+	.unblock_dma = tegra20_mc_unblock_dma,
+	.reset_status = tegra20_mc_reset_status,
+};
+
+static int tegra20_mc_icc_set(struct icc_node *src, struct icc_node *dst)
+{
+	/*
+	 * It should be possible to tune arbitration knobs here, but the
+	 * default values are known to work well on all devices. Hence
+	 * nothing to do here so far.
+	 */
+	return 0;
+}
+
+static int tegra20_mc_icc_aggreate(struct icc_node *node, u32 tag, u32 avg_bw,
+				   u32 peak_bw, u32 *agg_avg, u32 *agg_peak)
+{
+	/*
+	 * ISO clients need to reserve extra bandwidth up-front because
+	 * there could be high bandwidth pressure during initial filling
+	 * of the client's FIFO buffers.  Secondly, we need to take into
+	 * account impurities of the memory subsystem.
+	 */
+	if (tag & TEGRA_MC_ICC_TAG_ISO)
+		peak_bw = tegra_mc_scale_percents(peak_bw, 300);
+
+	*agg_avg += avg_bw;
+	*agg_peak = max(*agg_peak, peak_bw);
+
+	return 0;
+}
+
+static struct icc_node_data *
+tegra20_mc_of_icc_xlate_extended(struct of_phandle_args *spec, void *data)
+{
+	struct tegra_mc *mc = icc_provider_to_tegra_mc(data);
+	unsigned int i, idx = spec->args[0];
+	struct icc_node_data *ndata;
+	struct icc_node *node;
+
+	list_for_each_entry(node, &mc->provider.nodes, node_list) {
+		if (node->id != idx)
+			continue;
+
+		ndata = kzalloc(sizeof(*ndata), GFP_KERNEL);
+		if (!ndata)
+			return ERR_PTR(-ENOMEM);
+
+		ndata->node = node;
+
+		/* these clients are isochronous by default */
+		if (strstarts(node->name, "display") ||
+		    strstarts(node->name, "vi"))
+			ndata->tag = TEGRA_MC_ICC_TAG_ISO;
+		else
+			ndata->tag = TEGRA_MC_ICC_TAG_DEFAULT;
+
+		return ndata;
+	}
+
+	for (i = 0; i < mc->soc->num_clients; i++) {
+		if (mc->soc->clients[i].id == idx)
+			return ERR_PTR(-EPROBE_DEFER);
+	}
+
+	dev_err(mc->dev, "invalid ICC client ID %u\n", idx);
+
+	return ERR_PTR(-EINVAL);
+}
+
+static const struct tegra_mc_icc_ops tegra20_mc_icc_ops = {
+	.xlate_extended = tegra20_mc_of_icc_xlate_extended,
+	.aggregate = tegra20_mc_icc_aggreate,
+	.set = tegra20_mc_icc_set,
 };
 
 const struct tegra_mc_soc tegra20_mc_soc = {
@@ -290,7 +363,8 @@ const struct tegra_mc_soc tegra20_mc_soc = {
 	.client_id_mask = 0x3f,
 	.intmask = MC_INT_SECURITY_VIOLATION | MC_INT_INVALID_GART_PAGE |
 		   MC_INT_DECERR_EMEM,
-	.reset_ops = &terga20_mc_reset_ops,
+	.reset_ops = &tegra20_mc_reset_ops,
 	.resets = tegra20_mc_resets,
 	.num_resets = ARRAY_SIZE(tegra20_mc_resets),
+	.icc_ops = &tegra20_mc_icc_ops,
 };

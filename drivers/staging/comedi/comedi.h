@@ -680,7 +680,7 @@ struct comedi_rangeinfo {
  * value of 1 volt.
  *
  * The only defined flag value is %RF_EXTERNAL (%0x100), indicating that the
- * the range needs to be multiplied by an external reference.
+ * range needs to be multiplied by an external reference.
  */
 struct comedi_krange {
 	int min;
@@ -970,7 +970,7 @@ enum i8254_mode {
  *   major reasons exist why this caused major confusion for users:
  *   1) The register values are _NOT_ in user documentation, but rather in
  *     arcane locations, such as a few register programming manuals that are
- *     increasingly hard to find and the NI MHDDK (comments in in example code).
+ *     increasingly hard to find and the NI MHDDK (comments in example code).
  *     There is no one place to find the various valid values of the registers.
  *   2) The register values are _NOT_ completely consistent.  There is no way to
  *     gain any sense of intuition of which values, or even enums one should use
@@ -1005,35 +1005,38 @@ enum i8254_mode {
  * and INSN_DEVICE_CONFIG_GET_ROUTES.
  */
 #define NI_NAMES_BASE	0x8000u
+
+#define _TERM_N(base, n, x)	((base) + ((x) & ((n) - 1)))
+
 /*
  * not necessarily all allowed 64 PFIs are valid--certainly not for all devices
  */
-#define NI_PFI(x)	(NI_NAMES_BASE        + ((x) & 0x3f))
+#define NI_PFI(x)		_TERM_N(NI_NAMES_BASE, 64, x)
 /* 8 trigger lines by standard, Some devices cannot talk to all eight. */
-#define TRIGGER_LINE(x)	(NI_PFI(-1)       + 1 + ((x) & 0x7))
+#define TRIGGER_LINE(x)		_TERM_N(NI_PFI(-1) + 1, 8, x)
 /* 4 RTSI shared MUXes to route signals to/from TRIGGER_LINES on NI hardware */
-#define NI_RTSI_BRD(x)	(TRIGGER_LINE(-1) + 1 + ((x) & 0x3))
+#define NI_RTSI_BRD(x)		_TERM_N(TRIGGER_LINE(-1) + 1, 4, x)
 
 /* *** Counter/timer names : 8 counters max *** */
-#define NI_COUNTER_NAMES_BASE  (NI_RTSI_BRD(-1)  + 1)
-#define NI_MAX_COUNTERS	       7
-#define NI_CtrSource(x)	       (NI_COUNTER_NAMES_BASE + ((x) & NI_MAX_COUNTERS))
+#define NI_MAX_COUNTERS		8
+#define NI_COUNTER_NAMES_BASE	(NI_RTSI_BRD(-1)  + 1)
+#define NI_CtrSource(x)	      _TERM_N(NI_COUNTER_NAMES_BASE, NI_MAX_COUNTERS, x)
 /* Gate, Aux, A,B,Z are all treated, at times as gates */
-#define NI_GATES_NAMES_BASE    (NI_CtrSource(-1) + 1)
-#define NI_CtrGate(x)	       (NI_GATES_NAMES_BASE   + ((x) & NI_MAX_COUNTERS))
-#define NI_CtrAux(x)	       (NI_CtrGate(-1)   + 1  + ((x) & NI_MAX_COUNTERS))
-#define NI_CtrA(x)	       (NI_CtrAux(-1)    + 1  + ((x) & NI_MAX_COUNTERS))
-#define NI_CtrB(x)	       (NI_CtrA(-1)      + 1  + ((x) & NI_MAX_COUNTERS))
-#define NI_CtrZ(x)	       (NI_CtrB(-1)      + 1  + ((x) & NI_MAX_COUNTERS))
-#define NI_GATES_NAMES_MAX     NI_CtrZ(-1)
-#define NI_CtrArmStartTrigger(x) (NI_CtrZ(-1)    + 1  + ((x) & NI_MAX_COUNTERS))
+#define NI_GATES_NAMES_BASE	(NI_CtrSource(-1) + 1)
+#define NI_CtrGate(x)		_TERM_N(NI_GATES_NAMES_BASE, NI_MAX_COUNTERS, x)
+#define NI_CtrAux(x)		_TERM_N(NI_CtrGate(-1)  + 1, NI_MAX_COUNTERS, x)
+#define NI_CtrA(x)		_TERM_N(NI_CtrAux(-1)   + 1, NI_MAX_COUNTERS, x)
+#define NI_CtrB(x)		_TERM_N(NI_CtrA(-1)     + 1, NI_MAX_COUNTERS, x)
+#define NI_CtrZ(x)		_TERM_N(NI_CtrB(-1)     + 1, NI_MAX_COUNTERS, x)
+#define NI_GATES_NAMES_MAX	NI_CtrZ(-1)
+#define NI_CtrArmStartTrigger(x) _TERM_N(NI_CtrZ(-1)    + 1, NI_MAX_COUNTERS, x)
 #define NI_CtrInternalOutput(x) \
-		     (NI_CtrArmStartTrigger(-1)  + 1  + ((x) & NI_MAX_COUNTERS))
+		      _TERM_N(NI_CtrArmStartTrigger(-1) + 1, NI_MAX_COUNTERS, x)
 /** external pin(s) labeled conveniently as Ctr<i>Out. */
-#define NI_CtrOut(x)  (NI_CtrInternalOutput(-1)  + 1  + ((x) & NI_MAX_COUNTERS))
+#define NI_CtrOut(x)   _TERM_N(NI_CtrInternalOutput(-1) + 1, NI_MAX_COUNTERS, x)
 /** For Buffered sampling of ctr -- x series capability. */
-#define NI_CtrSampleClock(x)	(NI_CtrOut(-1)   + 1  + ((x) & NI_MAX_COUNTERS))
-#define NI_COUNTER_NAMES_MAX   NI_CtrSampleClock(-1)
+#define NI_CtrSampleClock(x)	_TERM_N(NI_CtrOut(-1)   + 1, NI_MAX_COUNTERS, x)
+#define NI_COUNTER_NAMES_MAX	NI_CtrSampleClock(-1)
 
 enum ni_common_signal_names {
 	/* PXI_Star: this is a non-NI-specific signal */

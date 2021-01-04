@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0+
 /*	FDDI network adapter driver for DEC FDDIcontroller 700/700-C devices.
  *
  *	Copyright (c) 2018  Maciej W. Rozycki
@@ -33,6 +33,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/io-64-nonatomic-lo-hi.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -56,7 +57,7 @@
 #define DRV_VERSION "v.1.1.4"
 #define DRV_RELDATE "Oct  6 2018"
 
-static char version[] =
+static const char version[] =
 	DRV_NAME ": " DRV_VERSION "  " DRV_RELDATE "  Maciej W. Rozycki\n";
 
 MODULE_AUTHOR("Maciej W. Rozycki <macro@linux-mips.org>");
@@ -784,7 +785,7 @@ err_rx:
 static void fza_tx_smt(struct net_device *dev)
 {
 	struct fza_private *fp = netdev_priv(dev);
-	struct fza_buffer_tx __iomem *smt_tx_ptr, *skb_data_ptr;
+	struct fza_buffer_tx __iomem *smt_tx_ptr;
 	int i, len;
 	u32 own;
 
@@ -799,6 +800,7 @@ static void fza_tx_smt(struct net_device *dev)
 
 		if (!netif_queue_stopped(dev)) {
 			if (dev_nit_active(dev)) {
+				struct fza_buffer_tx *skb_data_ptr;
 				struct sk_buff *skb;
 
 				/* Length must be a multiple of 4 as only word
@@ -1316,7 +1318,7 @@ static int fza_probe(struct device *bdev)
 	}
 
 	/* MMIO mapping setup. */
-	mmio = ioremap_nocache(start, len);
+	mmio = ioremap(start, len);
 	if (!mmio) {
 		pr_err("%s: cannot map MMIO\n", fp->name);
 		ret = -ENOMEM;

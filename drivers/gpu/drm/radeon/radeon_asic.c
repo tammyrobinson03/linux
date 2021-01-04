@@ -27,14 +27,16 @@
  */
 
 #include <linux/console.h>
-#include <drm/drmP.h>
+#include <linux/pci.h>
+#include <linux/vgaarb.h>
+
 #include <drm/drm_crtc_helper.h>
 #include <drm/radeon_drm.h>
-#include <linux/vgaarb.h>
-#include "radeon_reg.h"
+
+#include "atom.h"
 #include "radeon.h"
 #include "radeon_asic.h"
-#include "atom.h"
+#include "radeon_reg.h"
 
 /*
  * Registers accessors functions.
@@ -1511,6 +1513,7 @@ static struct radeon_asic sumo_asic = {
 		.force_performance_level = &sumo_dpm_force_performance_level,
 		.get_current_sclk = &sumo_dpm_get_current_sclk,
 		.get_current_mclk = &sumo_dpm_get_current_mclk,
+		.get_current_vddc = &sumo_dpm_get_current_vddc,
 	},
 	.pflip = {
 		.page_flip = &evergreen_page_flip,

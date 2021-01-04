@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016, Linaro Ltd.
  * Copyright (c) 2015, Sony Mobile Communications Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 #include <linux/firmware.h>
 #include <linux/module.h>
@@ -76,9 +68,8 @@ struct wcnss_msg_hdr {
 	u32 len;
 } __packed;
 
-/**
+/*
  * struct wcnss_version_resp - version request response
- * @hdr:	common packet wcnss_msg_hdr header
  */
 struct wcnss_version_resp {
 	struct wcnss_msg_hdr hdr;
@@ -116,9 +107,11 @@ struct wcnss_download_nv_resp {
 
 /**
  * wcnss_ctrl_smd_callback() - handler from SMD responses
- * @channel:	smd channel handle
+ * @rpdev:	remote processor message device pointer
  * @data:	pointer to the incoming data packet
  * @count:	size of the incoming data packet
+ * @priv:	unused
+ * @addr:	unused
  *
  * Handles any incoming packets from the remote WCNSS_CTRL service.
  */
@@ -275,6 +268,7 @@ free_req:
  * @wcnss:	wcnss handle, retrieved from drvdata
  * @name:	SMD channel name
  * @cb:		callback to handle incoming data on the channel
+ * @priv:	private data for use in the call-back
  */
 struct rpmsg_endpoint *qcom_wcnss_open_channel(void *wcnss, const char *name, rpmsg_rx_cb_t cb, void *priv)
 {

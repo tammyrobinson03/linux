@@ -1,5 +1,10 @@
 .. _reportingbugs:
 
+.. note::
+
+   This document is obsolete, and will be replaced by
+   'Documentation/admin-guide/reporting-issues.rst' in the near future.
+
 Reporting bugs
 ++++++++++++++
 
@@ -67,7 +72,7 @@ If you can't figure out which subsystem caused the issue, you should file
 a bug in kernel.org bugzilla and send email to
 linux-kernel@vger.kernel.org, referencing the bugzilla URL.  (For more
 information on the linux-kernel mailing list see
-http://www.tux.org/lkml/).
+http://vger.kernel.org/lkml/).
 
 
 Tips for reporting bugs
@@ -75,7 +80,7 @@ Tips for reporting bugs
 
 If you haven't reported a bug before, please read:
 
-	http://www.chiark.greenend.org.uk/~sgtatham/bugs.html
+	https://www.chiark.greenend.org.uk/~sgtatham/bugs.html
 
 	http://www.catb.org/esr/faqs/smart-questions.html
 
